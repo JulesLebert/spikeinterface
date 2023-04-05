@@ -34,7 +34,8 @@ _shared_job_kwargs_doc = """**job_kwargs: keyword arguments for parallel process
                 Context for multiprocessing. It can be None (default), "fork" or "spawn". 
                 Note that "fork" is only available on UNIX systems
     """
-    
+
+
 job_keys = ('n_jobs', 'total_memory', 'chunk_size', 'chunk_memory', 'chunk_duration', 'progress_bar', 
             'mp_context', 'verbose', 'max_threads_per_process')
 
@@ -42,22 +43,26 @@ job_keys = ('n_jobs', 'total_memory', 'chunk_size', 'chunk_memory', 'chunk_durat
 def fix_job_kwargs(runtime_job_kwargs):
     from .globals import get_global_job_kwargs
     job_kwargs = get_global_job_kwargs()
-    
+
     for k in runtime_job_kwargs:
         assert k in job_keys, (f"{k} is not a valid job keyword argument. "
                                f"Available keyword arguments are: {list(job_keys)}")
-    job_kwargs.update(runtime_job_kwargs)
+    # remove None
+    runtime_job_kwargs_exclude_none = runtime_job_kwargs.copy()
+    for job_key, job_value in runtime_job_kwargs.items():
+        if job_value is None:
+            del runtime_job_kwargs_exclude_none[job_key]
+    job_kwargs.update(runtime_job_kwargs_exclude_none)
 
-    # if n_jobs is -1, set to os.cpu_count()
-    if "n_jobs" in job_kwargs:
-        assert isinstance(job_kwargs["n_jobs"], (float, np.integer, int))
-        if isinstance(job_kwargs["n_jobs"], float):
-            n_jobs = int(job_kwargs["n_jobs"] * os.cpu_count())
-        elif job_kwargs["n_jobs"] < 0:            
-            n_jobs = os.cpu_count() + 1 + job_kwargs["n_jobs"]
-        else:
-            n_jobs = job_kwargs["n_jobs"]
-        job_kwargs["n_jobs"] = max(n_jobs, 1)
+    # if n_jobs is -1, set to os.cpu_count() (n_jobs is always in global job_kwargs)
+    n_jobs = job_kwargs['n_jobs']
+    assert isinstance(n_jobs, (float, np.integer, int))
+    if isinstance(n_jobs, float):
+        n_jobs = int(n_jobs * os.cpu_count())
+    elif n_jobs < 0:
+        n_jobs = os.cpu_count() + 1 + n_jobs
+    job_kwargs["n_jobs"] = max(n_jobs, 1)
+
     return job_kwargs
 
 
@@ -253,6 +258,9 @@ class ChunkRecordingExecutor:
         If True, a progress bar is printed to monitor the progress of the process
     handle_returns: bool
         If True, the function can return values
+    gather_func: None or callable
+        Optional function that is called in the main thread and retrieves the results of each worker.
+        This function can be used instead of `handle_returns` to implement custom storage on-the-fly.
     n_jobs: int
         Number of jobs to be used (default 1). Use -1 to use as many jobs as number of cores
     total_memory: str
@@ -272,7 +280,8 @@ class ChunkRecordingExecutor:
         Limit the number of thread per process using threadpoolctl modules.
         This used only when n_jobs>1
         If None, no limits.
-
+    
+        
     Returns
     -------
     res: list
@@ -280,7 +289,7 @@ class ChunkRecordingExecutor:
     """
 
     def __init__(self, recording, func, init_func, init_args, verbose=False, progress_bar=False, handle_returns=False,
-                 n_jobs=1, total_memory=None, chunk_size=None, chunk_memory=None, chunk_duration=None,
+                 gather_func=None, n_jobs=1, total_memory=None, chunk_size=None, chunk_memory=None, chunk_duration=None,
                  mp_context=None, job_name='', max_threads_per_process=1):
         self.recording = recording
         self.func = func
@@ -298,6 +307,7 @@ class ChunkRecordingExecutor:
         self.progress_bar = progress_bar
 
         self.handle_returns = handle_returns
+        self.gather_func = gather_func
 
         self.n_jobs = ensure_n_jobs(recording, n_jobs=n_jobs)
         self.chunk_size = ensure_chunk_size(recording,
@@ -334,6 +344,8 @@ class ChunkRecordingExecutor:
                 res = self.func(segment_index, frame_start, frame_stop, worker_ctx)
                 if self.handle_returns:
                     returns.append(res)
+                if self.gather_func is not None:
+                    self.gather_func(res)
         else:
             n_jobs = min(self.n_jobs, len(all_chunks))
             ######## Do you want to limit the number of threads per process?
@@ -352,12 +364,11 @@ class ChunkRecordingExecutor:
                 if self.progress_bar:
                     results = tqdm(results, desc=self.job_name, total=len(all_chunks))
 
-                if self.handle_returns:
-                    for res in results:
+                for res in results:
+                    if self.handle_returns:
                         returns.append(res)
-                else:
-                    for res in results:
-                        pass
+                    if self.gather_func is not None:
+                        self.gather_func(res)
 
         return returns
 
@@ -392,3 +403,5 @@ def function_wrapper(args):
     else:
         with threadpool_limits(limits=max_threads_per_process):
             return _func(segment_index, start_frame, end_frame, _worker_ctx)
+
+

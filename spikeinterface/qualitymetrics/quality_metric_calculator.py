@@ -106,15 +106,18 @@ class QualityMetricCalculator(BaseWaveformExtractorExtension):
 
             func = _misc_metric_name_to_func[metric_name]
 
-            res = func(self.waveform_extractor, **qm_params[metric_name])
-            if isinstance(res, dict):
-                # res is a dict convert to series
-                metrics[metric_name] = pd.Series(res)
-            else:
-                # res is a namedtuple with several dict
-                # so several columns
-                for i, col in enumerate(res._fields):
-                    metrics[col] = pd.Series(res[i])
+            params = qm_params[metric_name] if metric_name in qm_params else {}
+            res = func(self.waveform_extractor, **params)
+            # QM with uninstall dependencies might return None
+            if res is not None:
+                if isinstance(res, dict):
+                    # res is a dict convert to series
+                    metrics[metric_name] = pd.Series(res)
+                else:
+                    # res is a namedtuple with several dict
+                    # so several columns
+                    for i, col in enumerate(res._fields):
+                        metrics[col] = pd.Series(res[i])
 
         # metrics based on PCs
         pc_metric_names = [k for k in metric_names if k in _possible_pc_metric_names]
@@ -165,7 +168,7 @@ def compute_quality_metrics(waveform_extractor, load_if_exists=False,
     ----------
     waveform_extractor: WaveformExtractor
         The waveform extractor to compute metrics on.
-    load_if_exists : bool, optional, default: False
+    load_if_exists : bool, default: False
         Whether to load precomputed quality metrics, if they already exist.
     metric_names : list or None
         List of quality metrics to compute.

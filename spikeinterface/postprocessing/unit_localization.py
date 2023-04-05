@@ -105,7 +105,7 @@ def compute_unit_locations(waveform_extractor,
     ----------
     waveform_extractor: WaveformExtractor
         A waveform extractor object.
-    load_if_exists : bool, optional, default: False
+    load_if_exists : bool, default: False
         Whether to load precomputed unit locations, if they already exist.
     method: str
         'center_of_mass' / 'monopolar_triangulation'
@@ -128,13 +128,6 @@ def compute_unit_locations(waveform_extractor,
 
     unit_locations = ulc.get_data(outputs=outputs)
     return unit_locations
-
-
-def localize_units(*args, **kwargs):
-    warnings.warn("The 'localize_units' function is deprecated. "
-                  "Use 'compute_unit_locations' instead",
-                  DeprecationWarning, stacklevel=2)
-    return compute_unit_locations(*args, **kwargs)
 
 
 def make_initial_guess_and_bounds(wf_ptp, local_contact_locations, max_distance_um, initial_z=20):
@@ -262,8 +255,7 @@ def compute_monopolar_triangulation(waveform_extractor, optimizer='minimize_with
 
     unit_ids = waveform_extractor.sorting.unit_ids
 
-    recording = waveform_extractor.recording
-    contact_locations = recording.get_channel_locations()
+    contact_locations = waveform_extractor.get_channel_locations()
 
     sparsity = compute_sparsity(waveform_extractor, method='radius', radius_um=radius_um)
     templates = waveform_extractor.get_all_templates(mode='average')
