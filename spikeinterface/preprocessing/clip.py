@@ -88,6 +88,7 @@ class BlankSaturationRecording(BasePreprocessor):
 
     def __init__(self, recording, abs_threshold=None, quantile_threshold=None,
                  direction='upper', fill_value=None,
+                 before_ms=0, after_ms=0,
                  num_chunks_per_segment=50, chunk_size=500, seed=0):
 
         assert direction in ('upper', 'lower', 'both')
@@ -130,33 +131,49 @@ class BlankSaturationRecording(BasePreprocessor):
         BasePreprocessor.__init__(self, recording)
         for parent_segment in recording._recording_segments:
             rec_segment = ClipRecordingSegment(
-                parent_segment, a_min, value_min, a_max, value_max)
+                parent_segment, a_min, value_min, a_max, value_max,
+                before_ms=before_ms, after_ms=after_ms
+                )
             self.add_recording_segment(rec_segment)
 
-        self._kwargs = dict(recording=recording, abs_threshold=abs_threshold,
+        self._kwargs = dict(recording=recording, abs_threshold=abs_threshold, before_ms=before_ms, after_ms=after_ms,
                             quantile_threshold=quantile_threshold, direction=direction, fill_value=fill_value,
                             num_chunks_per_segment=num_chunks_per_segment, chunk_size=chunk_size,
                             seed=seed)
 
 
 class ClipRecordingSegment(BasePreprocessorSegment):
-    def __init__(self, parent_recording_segment, a_min, value_min, a_max, value_max):
+    def __init__(self, parent_recording_segment, a_min, value_min, a_max, value_max,
+                 before_ms=0, after_ms=0):
         BasePreprocessorSegment.__init__(self, parent_recording_segment)
 
         self.a_min = a_min
         self.value_min = value_min
         self.a_max = a_max
         self.value_max = value_max
+        self.before_ms = before_ms
+        self.after_ms = after_ms
 
     def get_traces(self, start_frame, end_frame, channel_indices):
         traces = self.parent_recording_segment.get_traces(
             start_frame, end_frame, channel_indices)
         traces = traces.copy()
+        fs = self.parent_recording_segment.sampling_frequency
+
+        # if self.a_min is not None:
+        #     traces[traces <= self.a_min] = self.value_min
+        # if self.a_max is not None:
+        #     traces[traces >= self.a_max] = self.value_max
 
         if self.a_min is not None:
-            traces[traces <= self.a_min] = self.value_min
+            min_indices = np.where(traces <= self.a_min)[0]
+            for index in min_indices:
+                traces[int(max(0, index - self.before_ms * fs // 1000)):int(min(len(traces), index + self.after_ms * fs // 1000))] = self.value_min
+
         if self.a_max is not None:
-            traces[traces >= self.a_max] = self.value_max
+            max_indices = np.where(traces >= self.a_max)[0]
+            for index in max_indices:
+                traces[int(max(0, index - self.before_ms * fs // 1000)):int(min(len(traces), index + self.after_ms * fs // 1000))] = self.value_max
 
         return traces
 
