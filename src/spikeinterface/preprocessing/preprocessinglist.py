@@ -27,6 +27,7 @@ from .interpolate_bad_channels import InterpolateBadChannelsRecording, interpola
 from .average_across_direction import AverageAcrossDirectionRecording, average_across_direction
 from .directional_derivative import DirectionalDerivativeRecording, directional_derivative
 from .depth_order import DepthOrderRecording, depth_order
+from .disconnection import RemoveDisconnectionEventRecording, remove_disconnection_event
 
 
 preprocessers_full_list = [
@@ -64,6 +65,7 @@ preprocessers_full_list = [
     DepthOrderRecording,
     AverageAcrossDirectionRecording,
     DirectionalDerivativeRecording,
+    RemoveDisconnectionEventRecording,
 ]
 
 installed_preprocessers_list = [pp for pp in preprocessers_full_list if pp.installed]
