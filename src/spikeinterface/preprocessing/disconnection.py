@@ -7,6 +7,48 @@ from .basepreprocessor import BasePreprocessor, BasePreprocessorSegment
 from ..core import get_random_data_chunks
 
 class RemoveDisconnectionEventRecording(BasePreprocessor):
+    """
+    Preprocessor to remove disconnection events from a recording.
+
+    Parameters
+    ----------
+    recording : RecordingExtractor
+        The recording extractor to preprocess.
+    fill_value : float or None, optional
+        Value to fill disconnection events with. If None, the median value of the recording is used.
+    compute_medians : str, optional
+        If 'random', compute the median power spectrum of a subset of the recording's data. If 'all', compute the median
+        power spectrum of the entire recording's data. Defaults to 'random'.
+    n_peaks : int, optional
+        The minimum number of peaks in the power spectrum required to compute the median power spectrum.
+        Defaults to 10.
+    prominence : float, optional
+        The prominence parameter used to find peaks in the power spectrum. Defaults to 0.5.
+    n_median_threshold : int, optional
+        The number of standard deviations from the median power spectrum above which a data segment is considered a
+        disconnection event. Defaults to 2.
+    num_chunks_per_segment : int, optional
+        The number of data chunks to use in each segment when computing the median power spectrum. Defaults to 100.
+    chunk_size : int, optional
+        The number of samples per chunk when computing the median power spectrum. Defaults to 10000.
+    seed : int, optional
+        Seed for the random number generator when computing the median power spectrum with random chunks. Defaults to 0.
+
+    Raises
+    ------
+    AssertionError
+        If `compute_medians` is not one of ['random', 'all'].
+
+    Notes
+    -----
+    This preprocessor first computes the median power spectrum of the recording's data by either randomly selecting a subset
+    of the data or using all the data. Then, it identifies disconnection events by comparing the power spectra of each data
+    segment to the median power spectrum. Data segments with power spectra more than `n_median_threshold` standard
+    deviations above the median are considered disconnection events and are filled with the value specified by `fill_value`
+    (or the median value of the recording if `fill_value` is None).
+
+        """
+    
     name='remove_disconnection_event'
 
     def __init__(self, recording,
@@ -82,19 +124,19 @@ class RemoveDisconnectionEventRecordingSegment(BasePreprocessorSegment):
             traces = traces.copy()
             median_power = self.median_power[channel_indices]
 
-            chunk_powers = []
+            # chunk_powers = []
             for i in range(0, traces.shape[0], self.chunk_size):
                 chunk = traces[i:i+self.chunk_size, :]
                 chunk_power = np.mean(np.square(np.abs(chunk)), axis=0)
                 chunk_power = np.mean(np.abs(chunk), axis=0)
-                chunk_powers.append(chunk_power)
+                # chunk_powers.append(chunk_power)
                 # chunk_power = np.sum(np.abs(x)**2)/len(x)
                 mask = np.greater(chunk_power, self.n_median_threshold*median_power)
 
                 chunk[:, mask] = self.fill_value
                 traces[i:i+self.chunk_size, :] = chunk
         
-        chunk_powers = np.vstack(chunk_powers)
+        # chunk_powers = np.vstack(chunk_powers)
 
         return traces
     
