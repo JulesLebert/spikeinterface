@@ -13,7 +13,7 @@ from spikeinterface.core import (
 )
 
 
-def get_neo_io_reader(raw_class: str, **neo_kwargs):
+def get_neo_io_reader(raw_class, **neo_kwargs):
     """
     Dynamically creates an instance of a NEO IO reader class using the specified class name and keyword arguments.
 
@@ -33,8 +33,11 @@ def get_neo_io_reader(raw_class: str, **neo_kwargs):
 
     """
 
-    rawio_module = importlib.import_module("neo.rawio")
-    neoIOclass = getattr(rawio_module, raw_class)
+    if isinstance(raw_class, str):
+        rawio_module = importlib.import_module("neo.rawio")
+        neoIOclass = getattr(rawio_module, raw_class)
+    else:
+        neoIOclass = raw_class
     neo_reader = neoIOclass(**neo_kwargs)
     neo_reader.parse_header()
 
